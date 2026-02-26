@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+expense_ai.db
+models/*.joblib
+.pytest_cache/
+
+release/*.zip

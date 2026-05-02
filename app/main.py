@@ -1,5 +1,5 @@
 from datetime import datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 
 from app.db import Transaction, get_session, init_db
 from app.ml import ExpenseMLEngine
@@ -12,6 +12,7 @@ from app.schemas import (
     TrainRequest,
     TransactionCreate,
     TransactionListResponse,
+    TransactionSearchResponse,
     TransactionResponse,
 )
 
@@ -105,4 +106,60 @@ def list_transactions() -> TransactionListResponse:
             )
             for row in rows
         ]
+    )
+
+
+@app.get("/transactions/search", response_model=TransactionSearchResponse)
+def search_transactions(
+    category: str | None = Query(default=None),
+    min_amount: float | None = Query(default=None, ge=0),
+    max_amount: float | None = Query(default=None, ge=0),
+    start_time: datetime | None = Query(default=None),
+    end_time: datetime | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> TransactionSearchResponse:
+    if min_amount is not None and max_amount is not None and min_amount > max_amount:
+        raise HTTPException(status_code=400, detail="min_amount cannot be greater than max_amount")
+    if start_time is not None and end_time is not None and start_time > end_time:
+        raise HTTPException(status_code=400, detail="start_time cannot be after end_time")
+
+    with get_session() as session:
+        query = session.query(Transaction)
+
+        if category:
+            query = query.filter(Transaction.category == category)
+        if min_amount is not None:
+            query = query.filter(Transaction.amount >= min_amount)
+        if max_amount is not None:
+            query = query.filter(Transaction.amount <= max_amount)
+        if start_time is not None:
+            query = query.filter(Transaction.timestamp >= start_time)
+        if end_time is not None:
+            query = query.filter(Transaction.timestamp <= end_time)
+
+        total = query.count()
+        rows = (
+            query.order_by(Transaction.timestamp.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    return TransactionSearchResponse(
+        items=[
+            TransactionResponse(
+                id=row.id,
+                description=row.description,
+                amount=row.amount,
+                category=row.category,
+                is_anomaly=row.is_anomaly,
+                anomaly_score=row.anomaly_score,
+                timestamp=row.timestamp,
+            )
+            for row in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
     )

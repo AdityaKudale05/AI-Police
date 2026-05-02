@@ -52,3 +52,10 @@ class TransactionResponse(BaseModel):
 
 class TransactionListResponse(BaseModel):
     items: list[TransactionResponse]
+
+
+class TransactionSearchResponse(BaseModel):
+    items: list[TransactionResponse]
+    total: int
+    limit: int
+    offset: int
